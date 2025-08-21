@@ -32,7 +32,7 @@ function updateDisplay() {
 ```
 
 **Key Points:**
-- Updates every 1000ms via `setInterval(updateDisplay, 1000)`
+- Updates every 10ms via `setInterval(updateDisplay, 10)`
 - Provides millisecond precision (e.g., `1692547234567`)
 - Synchronized across all devices viewing the page simultaneously
 
