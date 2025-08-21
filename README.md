@@ -7,6 +7,8 @@ A real-time computer vision synchronization tool that displays high-precision ti
 - **Millisecond-precision Unix timestamps** for accurate temporal synchronization
 - **Dynamic ArUco-style markers** that change based on current time (day, hour, minute, second, millisecond)
 - **Professional clapper/sync button** with standardized audio-visual sequence
+- **Keyboard activation** - Press Enter to trigger clapper from anywhere
+- **Automatic CSV export** - Programmatic sync data for post-processing
 - **Two-stage sync system**: Coarse (1.5s) + high-precision (200ms) sequences
 - **High-contrast display** optimized for computer vision detection
 - **Screen resolution and calibration data** for camera setup
