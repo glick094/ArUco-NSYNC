@@ -114,6 +114,34 @@
             z-index: 100;
         }
 
+        .clapper-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border: 3px solid black;
+            background: #ffdd00;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 8px;
+            z-index: 100;
+            transition: all 0.1s ease;
+        }
+
+        .clapper-button:hover {
+            background: #ffcc00;
+            transform: scale(1.05);
+        }
+
+        .clapper-button:active {
+            transform: scale(0.95);
+        }
+
+        .clapper-active {
+            animation: none !important;
+        }
+
         .day-marker-corner {
             position: fixed;
             top: min(20px, 2vh);
@@ -140,6 +168,7 @@
 </head>
 <body>
     <button class="fullscreen-button" onclick="toggleFullscreen()">Fullscreen</button>
+    <button class="clapper-button" onclick="triggerClapper()">🎬 CLAP</button>
     
     <div class="day-marker-corner">
         <div class="aruco-marker" id="dayMarker"></div>
@@ -177,6 +206,118 @@
     </div>
 
     <script>
+        let audioContext = null;
+        let clapperActive = false;
+
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+
+        function playTone(frequency = 800, duration = 150, volume = 0.3) {
+            const ctx = initAudioContext();
+            
+            // Create oscillator for tone
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+            
+            // Connect nodes
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+            
+            // Configure tone
+            oscillator.frequency.setValueAtTime(frequency, ctx.currentTime);
+            oscillator.type = 'sine';
+            
+            // Configure volume envelope
+            gainNode.gain.setValueAtTime(0, ctx.currentTime);
+            gainNode.gain.linearRampToValueAtTime(volume, ctx.currentTime + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration / 1000);
+            
+            // Play tone
+            oscillator.start(ctx.currentTime);
+            oscillator.stop(ctx.currentTime + duration / 1000);
+        }
+
+        function triggerClapper() {
+            if (clapperActive) return; // Prevent multiple simultaneous triggers
+            
+            clapperActive = true;
+            const originalBg = document.body.style.backgroundColor;
+            
+            // Main sequence timing (in milliseconds) - reliable across all devices
+            const mainSequence = [
+                { time: 0, color: '#ffff00', frequency: 600 },    // Yellow - Low tone
+                { time: 500, color: '#ff8800', frequency: 800 },  // Orange - Mid tone  
+                { time: 1000, color: '#ff0000', frequency: 1000 }, // Red - High tone (MAIN SYNC POINT)
+            ];
+            
+            // High-precision micro-sequence after main sync point
+            const microSequence = [
+                { time: 1000, color: '#ff0000' },    // Red (main sync)
+                { time: 1033, color: '#00ff00' },    // Green flash 1 (33ms later)
+                { time: 1066, color: '#0088ff' },    // Blue flash 2  (66ms later)
+                { time: 1100, color: '#00ff00' },    // Green flash 3 (100ms later)
+                { time: 1133, color: '#0088ff' },    // Blue flash 4  (133ms later)
+                { time: 1167, color: '#00ff00' },    // Green flash 5 (167ms later)
+                { time: 1200, color: 'white' }       // Final return to white
+            ];
+            
+            // Record sync timestamp at the main sync point (red)
+            const syncTimestamp = Date.now() + 1000;
+            
+            // Execute main sequence with audio
+            mainSequence.forEach(step => {
+                setTimeout(() => {
+                    document.body.style.backgroundColor = step.color;
+                    
+                    if (step.frequency) {
+                        playTone(step.frequency, 150, 0.5);
+                    }
+                    
+                    // Log sync point
+                    if (step.color === '#ff0000') {
+                        console.log(`CLAPPER SYNC: ${syncTimestamp}ms Unix: ${syncTimestamp}`);
+                    }
+                }, step.time);
+            });
+            
+            // Execute high-precision micro-sequence using requestAnimationFrame
+            let microIndex = 0;
+            const executeMicroSequence = () => {
+                if (microIndex < microSequence.length) {
+                    const step = microSequence[microIndex];
+                    const elapsed = Date.now() - syncTimestamp + 1000;
+                    
+                    if (elapsed >= step.time) {
+                        document.body.style.backgroundColor = step.color;
+                        
+                        // Add audio cues for green flashes only (to avoid audio overload)
+                        if (step.color === '#00ff00') {
+                            playTone(1400, 50, 0.2); // Short, high-pitched beep for green
+                        }
+                        
+                        console.log(`Micro-flash ${microIndex + 1}: ${Date.now()}ms (${elapsed}ms from start) - ${step.color}`);
+                        microIndex++;
+                        
+                        // Reset clapper state when sequence ends
+                        if (step.color === 'white') {
+                            clapperActive = false;
+                            return;
+                        }
+                    }
+                    requestAnimationFrame(executeMicroSequence);
+                }
+            };
+            
+            // Start micro-sequence at the main sync point
+            setTimeout(() => {
+                requestAnimationFrame(executeMicroSequence);
+            }, 1000);
+        }
+
         function generateMarkerPattern(value) {
             const binary = value.toString(2).padStart(25, '0');
             const pattern = Array(7).fill().map(() => Array(7).fill(1));
@@ -264,6 +405,11 @@
         
         // Update screen info when window is resized
         window.addEventListener('resize', updateScreenInfo);
+        
+        // Initialize audio context on first user interaction
+        document.addEventListener('click', () => {
+            initAudioContext();
+        }, { once: true });
     </script>
 </body>
 </html>

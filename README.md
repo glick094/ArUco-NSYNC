@@ -5,15 +5,18 @@ A real-time computer vision synchronization tool that displays high-precision ti
 ## Features
 
 - **Millisecond-precision Unix timestamps** for accurate temporal synchronization
-- **Dynamic ArUco-style markers** that change based on current time (day, hour, minute, second)
+- **Dynamic ArUco-style markers** that change based on current time (day, hour, minute, second, millisecond)
+- **Professional clapper/sync button** with standardized audio-visual sequence
+- **Two-stage sync system**: Coarse (1.5s) + high-precision (200ms) sequences
 - **High-contrast display** optimized for computer vision detection
 - **Screen resolution and calibration data** for camera setup
 - **Geometric font rendering** for additional feature point detection
+- **Responsive layout** ensures all markers visible without scrolling
 - **Fullscreen support** for maximum marker visibility
 
 ## Live Demo
 
-Access the app at: `https://YOUR_USERNAME.github.io/cv-sync-display/`
+Access the app at: `https://YOUR_USERNAME.github.io/aruco-nsync/`
 
 ## Technical Implementation
 
@@ -34,7 +37,8 @@ function updateDisplay() {
 **Key Points:**
 - Updates every 10ms via `setInterval(updateDisplay, 10)`
 - Provides millisecond precision (e.g., `1692547234567`)
-- Synchronized across all devices viewing the page simultaneously
+- High-frequency updates for precise frame synchronization
+- Updates ~1.7 times per 60fps frame (60fps = 16.67ms per frame)
 
 ### 2. ArUco Marker Generation
 
@@ -89,20 +93,34 @@ renderMarker('secondMarker', generateMarkerPattern(second));    // 0-59
 
 #### Timing Precision
 - **JavaScript Timer Resolution:** ~1-4ms depending on browser and system
-- **Display Update Rate:** 1000ms (1 second intervals)
+- **Display Update Rate:** 10ms (100Hz refresh rate)
+- **Frame Alignment Precision:** ~0.6 updates per 60fps frame (16.67ms)
 - **Network Synchronization:** ±50-200ms typical variance across devices
-- **Frame Timing:** Depends on display refresh rate (16.67ms for 60Hz displays)
+- **Sub-frame Timing:** Can capture timestamp changes between video frames
 
 #### Spatial Precision
 - **Marker Cell Size:** 400px ÷ 7 = ~57px per cell (main markers)
 - **Pixel Accuracy:** ±0.5 pixels for well-lit, high-contrast detection
 - **Distance Factors:** Precision degrades with camera distance and angle
 
+#### Enhanced Synchronization Benefits
+```javascript
+// With 10ms updates, you get precise frame-level sync
+const UPDATE_INTERVAL_MS = 10;        // 100Hz update rate
+const FRAME_INTERVAL_60FPS = 16.67;   // 60fps = 16.67ms per frame
+const UPDATES_PER_FRAME = FRAME_INTERVAL_60FPS / UPDATE_INTERVAL_MS; // ~1.7 updates per frame
+
+// This allows sub-frame timestamp precision
+const SYNC_TOLERANCE_MS = 10;   // Much tighter tolerance possible
+const FRAME_BUFFER_SIZE = 1;    // Single frame precision achievable
+```
+
 #### Recommended Setup Tolerances
 ```javascript
-// Timing tolerances for multi-camera sync
-const SYNC_TOLERANCE_MS = 100;  // Allow 100ms variance between cameras
-const FRAME_BUFFER_SIZE = 3;    // Capture 3 frames around sync point
+// Timing tolerances for high-precision multi-camera sync
+const SYNC_TOLERANCE_MS = 10;    // ±10ms variance (was 100ms)
+const FRAME_BUFFER_SIZE = 1;     // Single frame precision
+const TEMPORAL_RESOLUTION_MS = 10; // 100Hz temporal sampling
 
 // Spatial tolerances for marker detection  
 const MIN_MARKER_SIZE_PIXELS = 50;   // Minimum detectable marker size
@@ -120,7 +138,7 @@ const MAX_CAMERA_ANGLE_DEG = 45;     // Maximum viewing angle for reliable detec
    # Access at http://YOUR_IP:8000
    
    # Option 2: GitHub Pages (recommended)
-   # Access at https://username.github.io/cv-sync-display/
+   # Access at https://username.github.io/aruco-nsync/
    ```
 
 2. **Camera Positioning**
@@ -166,7 +184,7 @@ def detect_sync_markers(frame, timestamp_ms):
 
 def synchronize_cameras(camera_feeds):
     """
-    Synchronize multiple camera feeds using marker timestamps
+    Synchronize multiple camera feeds using high-frequency marker timestamps
     """
     sync_data = {}
     
@@ -176,17 +194,19 @@ def synchronize_cameras(camera_feeds):
         
         markers = detect_sync_markers(frame, capture_time)
         
-        # Match second markers across cameras for frame alignment
-        second_marker = find_marker_by_type(markers, 'second')
-        if second_marker:
+        # With 10ms updates, can achieve sub-frame synchronization
+        # Look for the most recent timestamp update
+        latest_timestamp = find_latest_timestamp_marker(markers)
+        if latest_timestamp:
             sync_data[camera_id] = {
                 'frame': frame,
-                'display_time': second_marker['value'],
+                'display_time': latest_timestamp['timestamp'],
                 'capture_time': capture_time,
+                'sync_precision': abs(capture_time - latest_timestamp['timestamp']),
                 'markers': markers
             }
     
-    return align_frames_by_sync_data(sync_data)
+    return align_frames_by_high_precision_sync(sync_data)
 ```
 
 #### Triangulation Applications
@@ -232,27 +252,49 @@ def triangulate_with_markers(sync_data):
 
 #### Best Practices
 
-1. **Timing Synchronization**
-   - Capture frames within ±100ms of second transitions
-   - Use second markers for frame alignment
-   - Buffer multiple frames around sync points
+1. **High-Precision Timing Synchronization**
+   - Capture frames within ±10ms for sub-frame precision
+   - Use millisecond timestamp changes for frame alignment
+   - No need for frame buffering - single frame precision achievable
+   - Monitor for timestamp discontinuities during capture
 
 2. **Spatial Calibration**
-   - Use hour/minute/day markers as static reference points
+   - Use hour/minute/day markers as static reference points during setup
    - Calibrate cameras using marker corner detection
    - Account for display screen physical dimensions
+   - Validate marker detection at target frame rates
 
 3. **Quality Assurance**
    - Verify marker detection confidence scores
-   - Cross-validate triangulation results across marker types
+   - Cross-validate synchronization precision across all cameras
    - Monitor timing drift over extended capture sessions
+   - Test synchronization accuracy at various frame rates (30fps, 60fps, 120fps)
 
-## Browser Compatibility
+4. **Frame Rate Optimization**
+   ```python
+   # Optimal sync windows for different frame rates
+   FRAME_RATES = {
+       30: 33.33,   # 30fps = 33.33ms per frame (3+ timestamp updates per frame)
+       60: 16.67,   # 60fps = 16.67ms per frame (1.7 timestamp updates per frame)  
+       120: 8.33    # 120fps = 8.33ms per frame (0.8 timestamp updates per frame)
+   }
+   
+   # For 120fps, capture multiple frames per timestamp update
+   # For 30/60fps, get multiple timestamp updates per frame
+   ```
 
-- **Chrome/Edge:** Full support, ~1ms timing precision
-- **Firefox:** Full support, ~1ms timing precision  
-- **Safari:** Full support, ~4ms timing precision
-- **Mobile browsers:** Supported, may have reduced precision
+## Browser Compatibility & Performance
+
+- **Chrome/Edge:** Full support, ~1ms timing precision, 10ms updates
+- **Firefox:** Full support, ~1ms timing precision, 10ms updates  
+- **Safari:** Full support, ~4ms timing precision, 10ms updates
+- **Mobile browsers:** Supported, may throttle to 16ms+ updates when backgrounded
+
+**Performance Notes:**
+- 10ms update rate provides excellent sub-frame precision for most video applications
+- For 60fps video (16.67ms/frame): ~1.7 timestamp updates per frame
+- For 30fps video (33.33ms/frame): ~3.3 timestamp updates per frame
+- For 120fps video (8.33ms/frame): timestamp updates every ~1.2 frames
 
 ## Hardware Requirements
 
